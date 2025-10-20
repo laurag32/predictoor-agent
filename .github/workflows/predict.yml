@@ -1,0 +1,31 @@
+name: Predict Feeds
+
+on:
+  schedule:
+    - cron: "*/180 * * * *"  # every 3 hours
+  workflow_dispatch:
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run predictions
+        env:
+          WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
+        run: python agent_predictoor.py
+      - name: Commit logs
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          git add performance_log.json
+          git commit -m "Update logs" || echo "No changes"
+          git push
