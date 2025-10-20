@@ -1,0 +1,24 @@
+feeds:
+  - name: "BTC/USD"
+    pair: "BTCUSDT"
+    timeframe: "1h"
+    confidence: 0.8
+    skip: false
+
+  - name: "ETH/USD"
+    pair: "ETHUSDT"
+    timeframe: "1h"
+    confidence: 0.75
+    skip: false
+
+  - name: "SOL/USD"
+    pair: "SOLUSDT"
+    timeframe: "1h"
+    confidence: 0.7
+    skip: false
+
+  - name: "BNB/USD"
+    pair: "BNBUSDT"
+    timeframe: "1h"
+    confidence: 0.72
+    skip: false
