@@ -1,24 +1,46 @@
+# ================================
+# Ocean Predictoor Agent Feeds
+# ================================
+
 feeds:
-  - name: "BTC/USD"
-    pair: "BTCUSDT"
-    timeframe: "1h"
-    confidence: 0.8
-    skip: false
+  - name: BTC/USDT
+    source: binance
+    interval: 5m
+    confidence: 0.92
+    symbol: BTCUSDT
+    network: sapphire-mainnet
+    market_id: 1
 
-  - name: "ETH/USD"
-    pair: "ETHUSDT"
-    timeframe: "1h"
-    confidence: 0.75
-    skip: false
+  - name: ETH/USDT
+    source: binance
+    interval: 5m
+    confidence: 0.90
+    symbol: ETHUSDT
+    network: sapphire-mainnet
+    market_id: 2
 
-  - name: "SOL/USD"
-    pair: "SOLUSDT"
-    timeframe: "1h"
-    confidence: 0.7
-    skip: false
+  - name: SOL/USDT
+    source: binance
+    interval: 5m
+    confidence: 0.91
+    symbol: SOLUSDT
+    network: sapphire-mainnet
+    market_id: 3
 
-  - name: "BNB/USD"
-    pair: "BNBUSDT"
-    timeframe: "1h"
-    confidence: 0.72
-    skip: false
+  - name: MATIC/USDT
+    source: binance
+    interval: 5m
+    confidence: 0.88
+    symbol: MATICUSDT
+    network: sapphire-mainnet
+    market_id: 4
+
+# Default settings
+defaults:
+  gelato_relayer: auto
+  contract_mode: auto
+  reward_currency: OCEAN
+  prediction_frequency: 30m   # every 30 minutes
+  gasless: true
+  log_performance: true
+  telegram_notify: true
