@@ -1,0 +1,36 @@
+name: Profit Tracker
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # every 24 hours
+  workflow_dispatch:
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run daily profit tracker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
+        run: python profit_tracker.py
+
+      - name: Commit profit logs
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          git add profit_log.json
+          git commit -m "Update profit log" || echo "No changes"
+          git push
