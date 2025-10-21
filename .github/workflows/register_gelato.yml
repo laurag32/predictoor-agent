@@ -1,0 +1,30 @@
+name: Register Gelato Jobs
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
+
+jobs:
+  register-gelato:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: pip install requests
+
+      - name: Verify or Register Gelato Jobs
+        env:
+          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
+          GELATO_RELAYER: ${{ secrets.GELATO_RELAYER }}
+          PREDICTOOR_API: ${{ secrets.PREDICTOOR_API }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python gelato_job_register.py
