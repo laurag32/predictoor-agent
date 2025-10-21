@@ -1,14 +1,28 @@
 name: Refresh Feeds
-
 on:
   schedule:
-    - cron: "0 0 * * *" # daily
+    - cron: "0 */3 * * *"   # every 3 hours
   workflow_dispatch:
 
 jobs:
-  refresh:
+  refresh-feeds:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Refresh feeds placeholder
-        run: echo "Feeds refreshed (new markets will be appended automatically by agent)."
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Refresh Prediction Feeds
+        run: |
+          python feeds_finder.py || echo "Feed refresh failed"
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
