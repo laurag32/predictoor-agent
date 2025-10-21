@@ -1,4 +1,4 @@
-name: Predictoor Agent (Mainnet)
+name: Predict Feeds (Auto Contract + Relayer)
 
 on:
   schedule:
@@ -16,26 +16,43 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Predictoor agent
+      # Step 1: Always refresh Predictoor contract + Gelato relayer before predicting
+      - name: Auto-refresh contract and relayer
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python contract_auto.py
+
+      # Step 2: Run predictions using the latest contract and relayer info
+      - name: Run predictions
         env:
           WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
           WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
-          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
-          GELATO_RELAYER: ${{ secrets.GELATO_RELAYER }}
-          PREDICTOOR_API: ${{ secrets.PREDICTOOR_API }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python agent_predictoor.py
 
-      - name: Commit logs (optional)
+      # Step 3: Commit logs (for dashboard & verification)
+      - name: Commit performance logs
         run: |
           git config user.email "actions@github.com"
           git config user.name "github-actions"
           git add performance_log.json || true
-          git commit -m "update: performance logs" || echo "No new logs"
-          git push
+          git commit -m "Auto-update: Prediction logs" || echo "No changes"
+          git push || echo "No push access"
+
+      # Step 4: Notify if errors occur
+      - name: Error catch & notify
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          -d chat_id="${TELEGRAM_CHAT_ID}" \
+          -d text="⚠️ Predictoor agent failed during run. Check GitHub logs immediately."
