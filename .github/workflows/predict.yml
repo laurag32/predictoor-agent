@@ -1,35 +1,40 @@
-name: Predict Feeds (Auto Contract + Relayer)
+name: Predictoor Agent Auto-Runner
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # every 30 minutes
+    - cron: "*/30 * * * *"   # ⏱️ every 30 minutes
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "feeds.yaml"          # 🔔 run instantly when feeds.yaml changes
+      - ".github/workflows/predict.yml"
 
 jobs:
-  predict:
+  run-agent:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Step 1: Always refresh Predictoor contract + Gelato relayer before predicting
-      - name: Auto-refresh contract and relayer
+      - name: Auto-update contract + relayer
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python contract_auto.py
 
-      # Step 2: Run predictions using the latest contract and relayer info
-      - name: Run predictions
+      - name: Run agent predictions
         env:
           WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
           WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
@@ -37,22 +42,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python agent_predictoor.py
 
-      # Step 3: Commit logs (for dashboard & verification)
-      - name: Commit performance logs
+      - name: Commit logs (performance & accuracy)
         run: |
           git config user.email "actions@github.com"
           git config user.name "github-actions"
-          git add performance_log.json || true
-          git commit -m "Auto-update: Prediction logs" || echo "No changes"
-          git push || echo "No push access"
-
-      # Step 4: Notify if errors occur
-      - name: Error catch & notify
-        if: failure()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-          -d chat_id="${TELEGRAM_CHAT_ID}" \
-          -d text="⚠️ Predictoor agent failed during run. Check GitHub logs immediately."
+          git add performance_log.json accuracy_log.json || true
+          git commit -m "Auto: update logs" || echo "No changes to commit"
+          git push
