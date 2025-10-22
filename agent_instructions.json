@@ -1,50 +1,65 @@
 {
-  "feeds": [
-    {
-      "name": "BTC/USDT",
-      "exchange": "Binance",
-      "interval_minutes": 30
+    "wallet": {
+        "address": "0x4e01c547aBd434C6661df5aC746EdB7a07CE3d3d",
+        "address_env": "WALLET_ADDRESS",
+        "private_key_env": "PRIVATE_KEY"
     },
-    {
-      "name": "ETH/USDT",
-      "exchange": "Binance",
-      "interval_minutes": 30
+
+    "telegram": {
+        "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+        "chat_id": "5484225134",
+        "bot_token_env": "TELEGRAM_BOT_TOKEN",
+        "chat_id_env": "TELEGRAM_CHAT_ID"
     },
-    {
-      "name": "SOL/USDT",
-      "exchange": "Binance",
-      "interval_minutes": 30
+
+    "predictoor": {
+        "contract_address": "auto-update", 
+        "api_endpoint_env": "PREDICTOOR_API",
+        "interval_seconds": 1800,
+        "confidence_threshold": 0.7
     },
-    {
-      "name": "LINK/USDT",
-      "exchange": "Binance",
-      "interval_minutes": 30
+
+    "gelato": {
+        "api_key_env": "GELATO_API_KEY",
+        "relayer_env": "GELATO_RELAYER",
+        "relayer": "auto-update"
+    },
+
+    "feeds": [
+        {
+            "name": "BTC/USDT",
+            "exchange": "binance",
+            "interval_minutes": 30,
+            "symbol": "BTCUSDT"
+        },
+        {
+            "name": "ETH/USDT",
+            "exchange": "binance",
+            "interval_minutes": 30,
+            "symbol": "ETHUSDT"
+        },
+        {
+            "name": "SOL/USDT",
+            "exchange": "binance",
+            "interval_minutes": 30,
+            "symbol": "SOLUSDT"
+        },
+        {
+            "name": "MATIC/USDT",
+            "exchange": "binance",
+            "interval_minutes": 30,
+            "symbol": "MATICUSDT"
+        }
+    ],
+
+    "logging": {
+        "performance_file": "logs/performance.log",
+        "error_file": "logs/errors.log"
+    },
+
+    "predictor": {
+        "interval_seconds": 1800,
+        "confidence_threshold": 0.7,
+        "api_endpoint_env": "PREDICTOOR_API"
     }
-  ],
-  "predictor": {
-    "interval_seconds": 1800,
-    "confidence_threshold": 0.7,
-    "api_endpoint_env": "PREDICTOOR_API"
-  },
-  "wallet": {
-    "private_key_env": "WALLET_PRIVATE_KEY",
-    "address_env": "WALLET_ADDRESS",
-    "address": "0x4e01c547aBd434C6661df5aC746EdB7a07CE3d3d"
-  },
-  "gelato": {
-    "api_key_env": "GELATO_API_KEY",
-    "relayer_env": "GELATO_RELAYER",
-    "relayer": "https://relay-fallback.gelato.digital"
-  },
-  "telegram": {
-    "bot_token": "7858658886:AAFLUCka__UUb1ZBUMXQJ9ZUNZ_PaAmzlBo",
-    "chat_id": "5484225134"
-  },
-  "predictoor": {
-    "contract_address": null
-  },
-  "logging": {
-    "performance_file": "performance_log.json",
-    "error_file": "error_log.json"
-  }
 }
