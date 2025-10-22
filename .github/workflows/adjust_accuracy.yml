@@ -2,14 +2,14 @@ name: Adjust Accuracy
 
 on:
   schedule:
-    - cron: "0 */2 * * *"  # every 2 hours
+    - cron: "*/30 * * * *"  # every 30 minutes
   workflow_dispatch:
 
 jobs:
-  adjust:
+  adjust_accuracy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -17,11 +17,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt requests python-telegram-bot
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
 
-      - name: Adjust accuracy
+      - name: Run Accuracy Adjuster
         env:
+          WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
+          PREDICTOOR_API: ${{ secrets.PREDICTOOR_API }}
+          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
+          GELATO_RELAYER: ${{ secrets.GELATO_RELAYER }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python accuracy_adjuster.py
