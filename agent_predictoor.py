@@ -1,84 +1,86 @@
 import os
 import json
 import time
+import random
 import requests
 from datetime import datetime
-from web3 import Web3
 from telegram import Bot
 
-# === Load config ===
-with open("agent_instructions.json", "r") as f:
-    cfg = json.load(f)
+# === CONFIG ===
+AGENT_JSON = "agent_instructions.json"
 
-FEEDS = cfg["feeds"]
-INTERVAL = cfg["predictor"]["interval_seconds"]
-CONF_THRESHOLD = cfg["predictor"]["confidence_threshold"]
+def load_agent_config():
+    with open(AGENT_JSON, "r") as f:
+        return json.load(f)
 
-# Wallet & Gelato
-WALLET_PRIVATE_KEY = os.getenv(cfg["wallet"]["private_key_env"])
-WALLET_ADDRESS = os.getenv(cfg["wallet"]["address_env"])
-PREDICTOOR_API = os.getenv(cfg["predictor"]["api_endpoint_env"])
-GELATO_API_KEY = os.getenv(cfg["gelato"]["api_key_env"])
-GELATO_RELAYER = os.getenv(cfg["gelato"]["relayer_env"])
+agent_config = load_agent_config()
+telegram_bot = Bot(token=agent_config["telegram"]["bot_token"])
+wallet = agent_config["wallet"]
+feeds = agent_config["feeds"]
+predictoor = agent_config["predictoor"]
+gelato_relayer = agent_config["gelato"].get("relayer")
 
-# Telegram
-bot = Bot(token=os.getenv(cfg["telegram"]["bot_token_env"]))
-CHAT_ID = os.getenv(cfg["telegram"]["chat_id_env"])
-
-# Logging
-PERF_FILE = cfg["logging"]["performance_file"]
-ERROR_FILE = cfg["logging"]["error_file"]
-
-# === Functions ===
+# === TELEGRAM NOTIFY ===
 def notify(msg):
     print(msg)
     try:
-        bot.send_message(chat_id=CHAT_ID, text=msg)
+        telegram_bot.send_message(chat_id=agent_config["telegram"]["chat_id"], text=msg)
     except Exception as e:
-        print(f"Telegram notify failed: {e}")
+        print(f"[WARN] Telegram notify failed: {e}")
 
-def send_prediction(feed):
+# === SAFE REQUEST ===
+def safe_post(url, payload, retries=3, delay=5):
+    for i in range(retries):
+        try:
+            r = requests.post(url, json=payload, timeout=15)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            notify(f"Retry {i+1}/{retries} failed for {url}: {e}")
+            time.sleep(delay)
+    return None
+
+# === PREDICTION LOGIC ===
+def prepare_prediction(feed):
     """
-    Submits prediction payload to Predictoor API via Gelato relayer
+    Simple example: mock prediction payload.
+    In real case: build model based on previous epochs.
     """
+    prediction_confidence = random.uniform(0.6, 0.9)
+    direction = "up" if prediction_confidence >= 0.7 else "down"
     payload = {
-        "feed": feed,
-        "confidence": CONF_THRESHOLD,
+        "feed": feed["name"],
+        "exchange": feed["exchange"],
+        "direction": direction,
+        "confidence": round(prediction_confidence, 2),
+        "wallet": wallet["address"],
         "timestamp": datetime.utcnow().isoformat()
     }
+    return payload
 
-    try:
-        # Send to Predictoor API (simulate mainnet gasless)
-        headers = {"Authorization": f"Bearer {PREDICTOOR_API}"}
-        resp = requests.post(PREDICTOOR_API, json=payload, headers=headers, timeout=10)
-        resp.raise_for_status()
+# === SUBMIT TO GELATO RELAYER ===
+def submit_prediction(payload):
+    if not gelato_relayer:
+        notify("❌ Gelato relayer unavailable.")
+        return False
+    response = safe_post(gelato_relayer, payload)
+    if response:
+        notify(f"✅ Submitted prediction for {payload['feed']} | {payload['direction']} @ {payload['confidence']}")
+        return True
+    else:
+        notify(f"❌ Submission failed for {payload['feed']}")
+        return False
 
-        # Log performance
-        with open(PERF_FILE, "a") as f:
-            f.write(f"{datetime.utcnow().isoformat()} - Submitted {feed} - {resp.text}\n")
-
-        notify(f"✅ Prediction sent for {feed} | Response: {resp.status_code}")
-
-    except Exception as e:
-        with open(ERROR_FILE, "a") as f:
-            f.write(f"{datetime.utcnow().isoformat()} - ERROR {feed}: {e}\n")
-        notify(f"❌ Error sending prediction for {feed}: {e}")
-
-# === Main loop ===
+# === MAIN LOOP ===
 def main():
+    notify("Starting Predictoor Agent...")
     while True:
-        try:
-            for feed in FEEDS:
-                send_prediction(feed)
+        for feed in feeds:
+            payload = prepare_prediction(feed)
+            submit_prediction(payload)
+        notify(f"Sleeping for {feeds[0]['interval_minutes']} minutes before next round...")
+        time.sleep(feeds[0]["interval_minutes"] * 60)  # repeat per feed interval
 
-            notify(f"Sleeping for {INTERVAL} seconds until next predictions...")
-            time.sleep(INTERVAL)
-
-        except Exception as e:
-            notify(f"❌ Unhandled error in main loop: {e}")
-            time.sleep(30)  # small retry delay
-
-# === Entrypoint ===
+# === ENTRYPOINT ===
 if __name__ == "__main__":
-    notify("🚀 Predictoor Agent started")
     main()
