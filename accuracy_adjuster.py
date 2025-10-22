@@ -1,88 +1,99 @@
-# accuracy_adjuster.py
-import yaml
-import json
 import os
-from telegram_notify import send_telegram_message
+import json
+import time
+import requests
+from datetime import datetime
+from telegram import Bot
 
-FEEDS_FILE = "feeds.yaml"
-LOG_FILE = "performance_log.json"
-MIN_ENTRIES = 5  # minimum records to compute accuracy
-SKIP_THRESHOLD = 0.40
+# === Load Agent Config ===
+AGENT_JSON = "agent_instructions.json"
 
-def load_json(path):
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r") as f:
+def load_agent_config():
+    with open(AGENT_JSON, "r") as f:
         return json.load(f)
 
-def load_yaml(path):
-    if not os.path.exists(path):
-        return {"feeds": []}
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+agent_config = load_agent_config()
 
-def save_yaml(path, data):
-    with open(path, "w") as f:
-        yaml.safe_dump(data, f)
+# === Telegram Setup ===
+telegram_bot = Bot(token=agent_config["telegram"]["bot_token"])
+CHAT_ID = agent_config["telegram"]["chat_id"]
 
-def compute_accuracy(logs, pair):
-    if pair not in logs: 
-        return None
-    entries = logs[pair]
-    if len(entries) < MIN_ENTRIES:
-        return None
-    # simple accuracy rule: treat "UP" vs actual outcome isn't available here,
-    # so we use a placeholder metric: fraction of entries with "direction" == "UP"
-    ups = sum(1 for e in entries if e.get("direction") == "UP")
-    return ups / len(entries)
+def notify(msg: str):
+    print(msg)
+    try:
+        telegram_bot.send_message(chat_id=CHAT_ID, text=msg)
+    except Exception as e:
+        print(f"[WARN] Telegram notify failed: {e}")
 
-def adjust():
-    logs = load_json(LOG_FILE)
-    conf = load_yaml(FEEDS_FILE)
-    feeds = conf.get("feeds", conf)  # support list or dict shape
+# === Wallet & Gelato ===
+WALLET_ADDRESS = agent_config["wallet"]["address"]
+GELATO_RELAYER = agent_config["gelato"].get("relayer")
+PREDICTOR_API = agent_config["predictor"]["api_endpoint"]
 
-    updated = []
-    notifications = []
-    for feed in feeds:
-        pair = feed.get("pair") or feed.get("name")
-        if not pair:
-            updated.append(feed); continue
+# === Logging Files ===
+PERF_FILE = agent_config["logging"]["performance_file"]
+ERROR_FILE = agent_config["logging"]["error_file"]
 
-        acc = compute_accuracy(logs, pair)
-        old_conf = feed.get("confidence", 0.6)
-        if acc is None:
-            # Not enough data: keep unchanged
-            feed["confidence"] = round(old_conf, 3)
-            updated.append(feed)
-            continue
+# === Safe POST ===
+def safe_post(url, payload, retries=3, delay=5):
+    for i in range(retries):
+        try:
+            r = requests.post(url, json=payload, timeout=15)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            notify(f"Retry {i+1}/{retries} failed for {url}: {e}")
+            time.sleep(delay)
+    return None
 
-        # Adjust rules:
-        if acc > 0.65:
-            feed["confidence"] = round(min(old_conf + 0.03, 0.95), 3)
-        elif acc < 0.45:
-            feed["confidence"] = round(max(old_conf - 0.03, 0.5), 3)
+# === Adjust Accuracy Logic ===
+def adjust_prediction_confidence(feed):
+    """Simple example: slightly adjust confidence up or down randomly."""
+    import random
+    current_conf = feed.get("confidence", 0.7)
+    change = random.uniform(-0.05, 0.05)
+    new_conf = min(max(current_conf + change, 0.5), 0.95)
+    feed["confidence"] = round(new_conf, 2)
+    return feed
+
+def submit_adjusted_feed(feed):
+    payload = {
+        "feed": feed["name"],
+        "confidence": feed["confidence"],
+        "wallet": WALLET_ADDRESS,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    if GELATO_RELAYER:
+        response = safe_post(GELATO_RELAYER, payload)
+        if response:
+            notify(f"✅ Submitted adjusted confidence for {feed['name']}: {feed['confidence']}")
         else:
-            feed["confidence"] = round(old_conf, 3)
-
-        # Skip feed if very poor accuracy
-        if acc < SKIP_THRESHOLD:
-            feed["skip"] = True
-            msg = f"⚠️ Feed {pair} disabled. Accuracy {acc:.2f} < {SKIP_THRESHOLD}"
-            notifications.append(msg)
-        updated.append(feed)
-
-    # write back (respecting original structure)
-    if isinstance(conf, dict) and "feeds" in conf:
-        conf["feeds"] = updated
+            notify(f"❌ Failed to submit adjusted confidence for {feed['name']}")
     else:
-        conf = {"feeds": updated}
-    save_yaml(FEEDS_FILE, conf)
-    print("[accuracy] Adjustment complete.")
+        notify("❌ Gelato relayer unavailable. Skipping submission.")
 
-    # send summary notifications if any critical items
-    if notifications:
-        body = "Accuracy adjuster flagged issues:\n" + "\n".join(notifications)
-        send_telegram_message(body)
+# === Main Loop ===
+def main():
+    notify("🚀 Accuracy Adjuster started")
+    FEEDS = agent_config["feeds"]
+    INTERVAL = agent_config["predictor"]["interval_seconds"]
 
+    while True:
+        try:
+            for feed in FEEDS:
+                feed = adjust_prediction_confidence(feed)
+                submit_adjusted_feed(feed)
+                # Log performance
+                with open(PERF_FILE, "a") as f:
+                    f.write(f"{datetime.utcnow().isoformat()} - Adjusted {feed['name']} - confidence {feed['confidence']}\n")
+            notify(f"Sleeping for {INTERVAL} seconds before next round...")
+            time.sleep(INTERVAL)
+        except Exception as e:
+            notify(f"❌ Unhandled error in Accuracy Adjuster: {e}")
+            with open(ERROR_FILE, "a") as f:
+                f.write(f"{datetime.utcnow().isoformat()} - ERROR: {e}\n")
+            time.sleep(30)
+
+# === Entrypoint ===
 if __name__ == "__main__":
-    adjust()
+    main()
