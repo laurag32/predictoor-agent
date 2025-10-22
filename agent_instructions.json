@@ -1,33 +1,35 @@
 {
-  "feeds": [
-    "BTC/USDT",
-    "ETH/USDT",
-    "SOL/USDT",
-    "ADA/USDT"
-  ],
-  "prediction_interval_minutes": 30,
+  "wallet": {
+    "address_env": "WALLET_ADDRESS",
+    "private_key_env": "WALLET_PRIVATE_KEY"
+  },
+  "predictor": {
+    "api_endpoint_env": "PREDICTOOR_API",
+    "feeds": [
+      "BTC/USDT",
+      "ETH/USDT",
+      "SOL/USDT",
+      "MATIC/USDT"
+    ],
+    "prediction_interval_seconds": 1800,
+    "claim_interval_seconds": 14400,
+    "higher_confidence": true
+  },
+  "gelato": {
+    "relayer_env": "GELATO_RELAYER",
+    "auto_select_best": true
+  },
   "telegram": {
     "bot_token_env": "TELEGRAM_BOT_TOKEN",
     "chat_id_env": "TELEGRAM_CHAT_ID"
   },
-  "wallet": {
-    "private_key_env": "WALLET_PRIVATE_KEY",
-    "address_env": "WALLET_ADDRESS"
-  },
-  "gelato": {
-    "relayer_urls": [
-      "https://api.gelato.network/v2/relayers",
-      "https://relay.gelato.digital/v2/relayers"
-    ],
-    "fallback": "0xGelatoDummyFallback"
-  },
-  "predictoor_contracts": [
-    "https://raw.githubusercontent.com/oceanprotocol/contracts/main/addresses.json",
-    "https://contracts.oceanprotocol.com/addresses.json",
-    "https://cdn.jsdelivr.net/gh/oceanprotocol/contracts@main/addresses.json"
-  ],
-  "fallback_predictoor": "0xA1cF4bE...DummyFallbackPredictoor",
   "logging": {
-    "performance_file": "performance_log.json"
+    "performance_file": "performance_log.json",
+    "claim_file": "claim_log.json",
+    "error_file": "error_log.json"
+  },
+  "agentic_ai": {
+    "enabled": true,
+    "auto_restart_on_error": true
   }
 }
