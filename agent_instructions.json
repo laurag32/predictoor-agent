@@ -1,15 +1,33 @@
 {
-  "version": "1.0",
-  "update": false,
-  "next_action": "continue",
-  "interval_minutes": 30,
-  "max_feeds": 4,
-  "accuracy_threshold": 0.8,
-  "payout_mode": "auto",
-  "relayer_source": "gelato",
-  "notifications": {
-    "enabled": true,
-    "via": "telegram"
+  "feeds": [
+    "BTC/USDT",
+    "ETH/USDT",
+    "SOL/USDT",
+    "ADA/USDT"
+  ],
+  "prediction_interval_minutes": 30,
+  "telegram": {
+    "bot_token_env": "TELEGRAM_BOT_TOKEN",
+    "chat_id_env": "TELEGRAM_CHAT_ID"
   },
-  "instructions": "Run normal prediction every 30 minutes on all 4 feeds. Claim automatically if accuracy > 80%. Use Gelato relayer and log to Telegram if errors occur."
+  "wallet": {
+    "private_key_env": "WALLET_PRIVATE_KEY",
+    "address_env": "WALLET_ADDRESS"
+  },
+  "gelato": {
+    "relayer_urls": [
+      "https://api.gelato.network/v2/relayers",
+      "https://relay.gelato.digital/v2/relayers"
+    ],
+    "fallback": "0xGelatoDummyFallback"
+  },
+  "predictoor_contracts": [
+    "https://raw.githubusercontent.com/oceanprotocol/contracts/main/addresses.json",
+    "https://contracts.oceanprotocol.com/addresses.json",
+    "https://cdn.jsdelivr.net/gh/oceanprotocol/contracts@main/addresses.json"
+  ],
+  "fallback_predictoor": "0xA1cF4bE...DummyFallbackPredictoor",
+  "logging": {
+    "performance_file": "performance_log.json"
+  }
 }
