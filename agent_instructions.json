@@ -1,35 +1,50 @@
 {
-  "wallet": {
-    "address_env": "WALLET_ADDRESS",
-    "private_key_env": "WALLET_PRIVATE_KEY"
-  },
+  "feeds": [
+    {
+      "name": "BTC/USDT",
+      "exchange": "Binance",
+      "interval_minutes": 30
+    },
+    {
+      "name": "ETH/USDT",
+      "exchange": "Binance",
+      "interval_minutes": 30
+    },
+    {
+      "name": "SOL/USDT",
+      "exchange": "Binance",
+      "interval_minutes": 30
+    },
+    {
+      "name": "LINK/USDT",
+      "exchange": "Binance",
+      "interval_minutes": 30
+    }
+  ],
   "predictor": {
-    "api_endpoint_env": "PREDICTOOR_API",
-    "feeds": [
-      "BTC/USDT",
-      "ETH/USDT",
-      "SOL/USDT",
-      "MATIC/USDT"
-    ],
-    "prediction_interval_seconds": 1800,
-    "claim_interval_seconds": 14400,
-    "higher_confidence": true
+    "interval_seconds": 1800,
+    "confidence_threshold": 0.7,
+    "api_endpoint_env": "PREDICTOOR_API"
+  },
+  "wallet": {
+    "private_key_env": "WALLET_PRIVATE_KEY",
+    "address_env": "WALLET_ADDRESS",
+    "address": "0x4e01c547aBd434C6661df5aC746EdB7a07CE3d3d"
   },
   "gelato": {
+    "api_key_env": "GELATO_API_KEY",
     "relayer_env": "GELATO_RELAYER",
-    "auto_select_best": true
+    "relayer": "https://relay-fallback.gelato.digital"
   },
   "telegram": {
-    "bot_token_env": "TELEGRAM_BOT_TOKEN",
-    "chat_id_env": "TELEGRAM_CHAT_ID"
+    "bot_token": "7858658886:AAFLUCka__UUb1ZBUMXQJ9ZUNZ_PaAmzlBo",
+    "chat_id": "5484225134"
+  },
+  "predictoor": {
+    "contract_address": null
   },
   "logging": {
     "performance_file": "performance_log.json",
-    "claim_file": "claim_log.json",
     "error_file": "error_log.json"
-  },
-  "agentic_ai": {
-    "enabled": true,
-    "auto_restart_on_error": true
   }
 }
