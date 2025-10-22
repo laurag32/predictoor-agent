@@ -2,7 +2,7 @@ name: Predict Feeds
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # every 30 minutes
+    - cron: "*/30 * * * *"  # every 30 min
   workflow_dispatch:
 
 jobs:
@@ -18,12 +18,15 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt python-telegram-bot requests
+        run: pip install -r requirements.txt requests python-telegram-bot web3
 
-      - name: Run agent
+      - name: Run predictions
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
           WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
-        run: python agent_runner.py
+          PREDICTOOR_API: ${{ secrets.PREDICTOOR_API }}
+          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
+          GELATO_RELAYER: ${{ secrets.GELATO_RELAYER }}
+        run: python agent_predictoor.py
