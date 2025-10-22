@@ -2,12 +2,13 @@ name: Refresh Feeds
 
 on:
   schedule:
-    - cron: "0 */1 * * *"  # every 1 hour
+    - cron: "0 */6 * * *" # every 6 hours
   workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -18,38 +19,42 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt requests python-telegram-bot
+        run: pip install -r requirements.txt
 
-      - name: Refresh feeds
+      - name: Refresh agent_instructions.json
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python - <<'PYTHON_SCRIPT'
-import os, json
-from datetime import datetime
-from telegram import Bot
+          python - <<'EOF'
+          import os, json, requests
 
-with open("agent_instructions.json","r") as f:
-    cfg = json.load(f)
+          TASKADE_FEEDS_API = "https://api.taskade.com/v1/feeds"  # replace with actual feed source if needed
+          AGENT_JSON = "agent_instructions.json"
 
-FEEDS = cfg["feeds"]
-bot = Bot(token=os.getenv(cfg["telegram"]["bot_token_env"]))
-CHAT_ID = os.getenv(cfg["telegram"]["chat_id_env"])
-performance_file = cfg["logging"]["performance_file"]
+          try:
+              r = requests.get(TASKADE_FEEDS_API, timeout=10)
+              r.raise_for_status()
+              feeds = r.json().get("feeds", [])
 
-def notify(msg):
-    print(msg)
-    try:
-        bot.send_message(chat_id=CHAT_ID, text=msg)
-    except Exception as e:
-        print(f"Telegram notify failed: {e}")
+              agent_config = {}
+              if os.path.exists(AGENT_JSON):
+                  with open(AGENT_JSON, "r") as f:
+                      agent_config = json.load(f)
 
-for feed in FEEDS:
-    ts = datetime.utcnow().isoformat()
-    notify(f"[{ts}] Feed refreshed: {feed}")
-    with open(performance_file,"a") as f:
-        f.write(f"{ts} - Refreshed feed: {feed}\n")
+              agent_config["feeds"] = []
+              for feed in feeds:
+                  agent_config["feeds"].append({
+                      "name": feed["name"],
+                      "exchange": feed["exchange"],
+                      "interval_minutes": feed.get("interval_minutes", 30)
+                  })
 
-notify("✅ All feeds refreshed successfully.")
-PYTHON_SCRIPT
+              with open(AGENT_JSON, "w") as f:
+                  json.dump(agent_config, f, indent=2)
+
+              print(f"✅ agent_instructions.json updated with {len(feeds)} feeds.")
+
+          except Exception as e:
+              print(f"❌ Failed to refresh feeds: {e}")
+          EOF
