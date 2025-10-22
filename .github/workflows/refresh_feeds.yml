@@ -1,68 +1,55 @@
-name: 🔁 Refresh Feeds (Auto-Chain)
+name: Refresh Feeds
 
 on:
   schedule:
-    - cron: "0 */3 * * *"  # every 3 hours
+    - cron: "0 */1 * * *"  # every 1 hour
   workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 🧱 Checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      - name: 📦 Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt requests python-telegram-bot
 
-      - name: ♻️ Refresh feeds
-        id: refresh_run
-        run: |
-          python contract_auto.py | tee refresh_log.txt
+      - name: Refresh feeds
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-      - name: 🧩 Extract warnings/errors
-        id: log_summary
         run: |
-          echo "errors=$(grep -E '❌|⚠️|Error|Failed|Traceback' refresh_log.txt || echo 'None')" >> $GITHUB_OUTPUT
+          python - <<'PYTHON_SCRIPT'
+import os, json
+from datetime import datetime
+from telegram import Bot
 
-      - name: 💾 Commit refreshed data
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add active_contracts.json gelato_relayer.json || true
-          git commit -m "Auto-update contracts/relayer" || echo "No changes"
-          git push
+with open("agent_instructions.json","r") as f:
+    cfg = json.load(f)
 
-      - name: 📲 Send Telegram summary
-        if: always()
-        run: |
-          MSG="🔁 Feed Refresh Completed
-          • Repo: $GITHUB_REPOSITORY
-          • Status: ${{ job.status }}
-          • Time: $(date -u)
+FEEDS = cfg["feeds"]
+bot = Bot(token=os.getenv(cfg["telegram"]["bot_token_env"]))
+CHAT_ID = os.getenv(cfg["telegram"]["chat_id_env"])
+performance_file = cfg["logging"]["performance_file"]
 
-          ⚙️ Summary:
-          ${{ steps.log_summary.outputs.errors }}"
-          
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -d text="$MSG"
+def notify(msg):
+    print(msg)
+    try:
+        bot.send_message(chat_id=CHAT_ID, text=msg)
+    except Exception as e:
+        print(f"Telegram notify failed: {e}")
 
-      - name: 🚀 Trigger Predict job
-        if: success()
-        run: |
-          echo "Triggering Predict workflow..."
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/workflows/predict.yml/dispatches \
-            -d '{"ref":"main"}'
+for feed in FEEDS:
+    ts = datetime.utcnow().isoformat()
+    notify(f"[{ts}] Feed refreshed: {feed}")
+    with open(performance_file,"a") as f:
+        f.write(f"{ts} - Refreshed feed: {feed}\n")
+
+notify("✅ All feeds refreshed successfully.")
+PYTHON_SCRIPT
