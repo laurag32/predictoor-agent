@@ -1,28 +1,68 @@
-name: Refresh Feeds
+name: 🔁 Refresh Feeds (Auto-Chain)
+
 on:
   schedule:
-    - cron: "0 */3 * * *"   # every 3 hours
+    - cron: "0 */3 * * *"  # every 3 hours
   workflow_dispatch:
 
 jobs:
-  refresh-feeds:
+  refresh:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: 🧱 Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Refresh Prediction Feeds
+      - name: ♻️ Refresh feeds
+        id: refresh_run
         run: |
-          python feeds_finder.py || echo "Feed refresh failed"
+          python contract_auto.py | tee refresh_log.txt
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: 🧩 Extract warnings/errors
+        id: log_summary
+        run: |
+          echo "errors=$(grep -E '❌|⚠️|Error|Failed|Traceback' refresh_log.txt || echo 'None')" >> $GITHUB_OUTPUT
+
+      - name: 💾 Commit refreshed data
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add active_contracts.json gelato_relayer.json || true
+          git commit -m "Auto-update contracts/relayer" || echo "No changes"
+          git push
+
+      - name: 📲 Send Telegram summary
+        if: always()
+        run: |
+          MSG="🔁 Feed Refresh Completed
+          • Repo: $GITHUB_REPOSITORY
+          • Status: ${{ job.status }}
+          • Time: $(date -u)
+
+          ⚙️ Summary:
+          ${{ steps.log_summary.outputs.errors }}"
+          
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="$MSG"
+
+      - name: 🚀 Trigger Predict job
+        if: success()
+        run: |
+          echo "Triggering Predict workflow..."
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/predict.yml/dispatches \
+            -d '{"ref":"main"}'
