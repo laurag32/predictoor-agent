@@ -1,86 +1,50 @@
-# contract_auto.py
-import os
-import json
-import time
-import requests
+import json, requests, time
 
-AGENT_JSON = "agent_instructions.json"
-
-# Telegram
-cfg = json.load(open(AGENT_JSON))
-TELEGRAM_BOT_TOKEN = cfg["telegram"]["bot_token"]
-TELEGRAM_CHAT_ID = cfg["telegram"]["chat_id"]
-
-# Contract & Relayer sources
-OCEAN_REGISTRY_URLS = [
-    "https://raw.githubusercontent.com/oceanprotocol/contracts/main/addresses.json",
-    "https://contracts.oceanprotocol.com/addresses.json",
-    "https://cdn.jsdelivr.net/gh/oceanprotocol/contracts@main/addresses.json"
-]
-GELATO_RELAYER_URLS = [
-    "https://api.gelato.network/v2/relayers",
-    "https://relay.gelato.digital/v2/relayers"
-]
-
-def notify(msg: str):
-    print(msg)
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+def fetch_predictoor_contract():
+    urls = [
+        "https://raw.githubusercontent.com/oceanprotocol/addresses/main/predictoor.json",
+        "https://cdn.jsdelivr.net/gh/oceanprotocol/addresses@main/predictoor.json",
+        "https://oceanprotocol.github.io/addresses/predictoor.json"
+    ]
+    for i, url in enumerate(urls, 1):
         try:
-            requests.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
-                timeout=10
-            )
+            print(f"🔄 Fetching Predictoor contract (attempt {i})...")
+            response = requests.get(url, timeout=8)
+            response.raise_for_status()
+            data = response.json()
+            contract = data.get("predictoor", {}).get("address")
+            if contract:
+                print(f"✅ Found Predictoor contract: {contract}")
+                return contract
         except Exception as e:
-            print(f"[WARN] Telegram notify failed: {e}")
+            print(f"⚠️ Attempt {i} failed: {e}")
+            time.sleep(2)
+    print("⚠️ Using hardcoded fallback contract.")
+    return "0x7F645c91c3D177F0030041b98d89F2D9992c2125"  # fallback
 
-def safe_get(url, retries=3, delay=5):
-    for i in range(retries):
+def fetch_gelato_relayer():
+    urls = [
+        "https://relay.gelato.network/api/v2/relayers",
+        "https://relay.gelato.digital/api/v2/relayers"
+    ]
+    for i, url in enumerate(urls, 1):
         try:
-            r = requests.get(url, timeout=10)
-            r.raise_for_status()
-            return r.text
+            print(f"🔄 Fetching Gelato relayer (attempt {i})...")
+            response = requests.get(url, timeout=8)
+            response.raise_for_status()
+            data = response.json()
+            if data and isinstance(data, dict):
+                relayer = list(data.get("relayers", []))[0]
+                print(f"✅ Gelato relayer fetched: {relayer}")
+                return relayer
         except Exception as e:
-            notify(f"Retry {i+1}/{retries} failed for {url}: {e}")
-            time.sleep(delay)
-    return None
-
-def get_predictoor_contract():
-    for url in OCEAN_REGISTRY_URLS:
-        text = safe_get(url)
-        if text:
-            try:
-                data = json.loads(text)
-                predictoor = data.get("sapphire-mainnet", {}).get("Predictoor")
-                if predictoor:
-                    json.dump({"predictoor_contract": predictoor}, open("active_contracts.json", "w"))
-                    notify(f"✅ Predictoor contract auto-fetched:\n{predictoor}")
-                    return predictoor
-            except Exception as e:
-                notify(f"Error parsing JSON from {url}: {e}")
-    notify("⚠️ Predictoor contract unavailable (network or JSON error).")
-    return None
-
-def get_gelato_relayer():
-    for url in GELATO_RELAYER_URLS:
-        text = safe_get(url)
-        if text:
-            try:
-                data = json.loads(text)
-                relayers = data.get("relayers", []) if isinstance(data, dict) else data
-                if relayers:
-                    best = max(relayers, key=lambda x: x.get("jobsExecuted", 0))
-                    relayer = best.get("address") or best.get("url") or str(best)
-                    json.dump({"relayer": relayer}, open("gelato_relayer.json", "w"))
-                    notify(f"✅ Selected Gelato relayer: {relayer}")
-                    return relayer
-            except Exception as e:
-                notify(f"Error parsing relayer JSON from {url}: {e}")
-    notify("❌ Unable to fetch Gelato relayer, using fallback.")
+            print(f"⚠️ Attempt {i} failed: {e}")
+            time.sleep(2)
+    print("⚠️ Using default Gelato relayer from JSON.")
     return "https://relay-fallback.gelato.digital"
 
 if __name__ == "__main__":
-    notify("Auto-updating contract and relayer...")
-    get_predictoor_contract()
-    get_gelato_relayer()
-    notify("✅ Auto-update completed.")
+    print("Auto-updating contract and relayer...")
+    predictoor_contract = fetch_predictoor_contract()
+    gelato_relayer = fetch_gelato_relayer()
+    print(f"✅ Auto-update completed.\nContract: {predictoor_contract}\nRelayer: {gelato_relayer}")
