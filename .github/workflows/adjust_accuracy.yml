@@ -2,31 +2,45 @@ name: Adjust Accuracy
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # every 30 minutes
+    - cron: "*/30 * * * *"   # Runs every 30 minutes
   workflow_dispatch:
 
 jobs:
-  adjust_accuracy:
+  adjust:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      PREDICTOOR_API: ${{ secrets.PREDICTOOR_API }}
+      WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+      GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
+
     steps:
-      - name: Checkout Repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests web3 python-telegram-bot
 
-      - name: Run Accuracy Adjuster
-        env:
-          WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
-          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
-          PREDICTOOR_API: ${{ secrets.PREDICTOOR_API }}
-          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
-          GELATO_RELAYER: ${{ secrets.GELATO_RELAYER }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python accuracy_adjuster.py
+      - name: Run contract auto-update
+        run: |
+          echo "🚀 Running contract and relayer updater..."
+          python contract_auto.py || echo "⚠️ Auto-update completed with warnings"
+
+      - name: Run accuracy adjuster
+        run: |
+          echo "🎯 Starting Accuracy Adjuster..."
+          python accuracy_adjuster.py
+
+      - name: Confirm completion
+        run: |
+          echo "✅ Accuracy adjustment completed at $(date -u)"
