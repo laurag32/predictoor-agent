@@ -1,51 +1,60 @@
-name: Predictoor Agent Auto-Runner
+name: 🤖 Predict Feeds (Auto-Agent)
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # ⏱️ every 30 minutes
+    - cron: "*/180 * * * *"  # every 3 hours
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - "feeds.yaml"          # 🔔 run instantly when feeds.yaml changes
-      - ".github/workflows/predict.yml"
 
 jobs:
-  run-agent:
+  predict:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: 🧱 Checkout repo
+        uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Auto-update contract + relayer
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python contract_auto.py
-
-      - name: Run agent predictions
+      - name: 🔮 Run Predictoor Agent
+        id: agent_run
+        run: |
+          python agent_predictoor.py | tee predict_log.txt
         env:
           WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
           WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python agent_predictoor.py
 
-      - name: Commit logs (performance & accuracy)
+      - name: 🧩 Extract errors or warnings
+        id: log_summary
         run: |
-          git config user.email "actions@github.com"
+          echo "errors=$(grep -E '❌|⚠️|Error|Failed|Traceback' predict_log.txt || echo 'None')" >> $GITHUB_OUTPUT
+
+      - name: 💾 Commit logs
+        run: |
           git config user.name "github-actions"
-          git add performance_log.json accuracy_log.json || true
-          git commit -m "Auto: update logs" || echo "No changes to commit"
+          git config user.email "actions@github.com"
+          git add performance_log.json || true
+          git commit -m "Update performance logs" || echo "No changes"
           git push
+
+      - name: 📲 Send Telegram summary
+        if: always()
+        run: |
+          MSG="🤖 Predictoor Agent Run Completed
+          • Repo: $GITHUB_REPOSITORY
+          • Status: ${{ job.status }}
+          • Time: $(date -u)
+
+          ⚙️ Summary:
+          ${{ steps.log_summary.outputs.errors }}"
+          
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="$MSG"
