@@ -1,20 +1,30 @@
-# contract_auto.py
-import os
-import json
-import requests
-import time
+# contract_auto.py (final resilient version)
+import os, json, time, requests, pathlib
 
-# ✅ Main and backup sources for Predictoor contract registry
-OCEAN_PRIMARY = "https://raw.githubusercontent.com/oceanprotocol/contracts/main/addresses.json"
-OCEAN_BACKUP = "https://contracts.oceanprotocol.com/addresses.json"
+# --- registry & relayer endpoints ---
+OCEAN_PREDICTOOR_REGISTRY = [
+    "https://raw.githubusercontent.com/oceanprotocol/contracts/main/addresses.json",
+    "https://contracts.oceanprotocol.com/addresses.json",
+    "https://cdn.jsdelivr.net/gh/oceanprotocol/contracts@main/addresses.json"
+]
 
-# ✅ Telegram for logs
+GELATO_RELAYER_API = [
+    "https://api.gelato.network/v2/relayers",
+    "https://relay.gelato.digital/v2/relayers"
+]
+
+# --- Telegram setup ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# =============== CORE HELPERS ===================
+# --- cache paths ---
+CACHE_CONTRACT = pathlib.Path("active_contracts.json")
+CACHE_RELAYER = pathlib.Path("gelato_relayer.json")
+
+
+# ===== utilities =====
 def notify(msg: str):
-    """Send Telegram update if available, else print."""
+    print(msg)
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         try:
             requests.post(
@@ -24,87 +34,95 @@ def notify(msg: str):
             )
         except Exception as e:
             print(f"Telegram notify failed: {e}")
-    print(msg)
 
 
-# =============== CONTRACT FETCHER ===================
-def get_predictoor_contract():
-    """Fetch the Predictoor contract from Ocean registry with fallback."""
-    urls = [OCEAN_PRIMARY, OCEAN_BACKUP]
-    for url in urls:
+def fetch_json(url):
+    """Try multiple times and return JSON or None."""
+    for i in range(3):
         try:
-            r = requests.get(url, timeout=15)
-            data = r.json()
-            sapphire_contracts = data.get("sapphire-mainnet", {})
-            predictoor = sapphire_contracts.get("Predictoor", "")
-            if predictoor:
-                with open("active_contracts.json", "w") as f:
-                    json.dump({"predictoor_contract": predictoor}, f)
-                notify(f"✅ Predictoor contract fetched:\n{predictoor}")
-                return predictoor
+            r = requests.get(url, timeout=10)
+            return r.json()
         except Exception as e:
-            notify(f"⚠️ Error fetching Predictoor contract from {url}: {e}")
-
-    # fallback to local cache
-    if os.path.exists("active_contracts.json"):
-        try:
-            with open("active_contracts.json") as f:
-                cached = json.load(f).get("predictoor_contract")
-                if cached:
-                    notify(f"♻️ Using cached Predictoor contract:\n{cached}")
-                    return cached
-        except Exception as e:
-            notify(f"❌ Cached contract corrupted: {e}")
-
-    notify("🚨 Predictoor contract unavailable (network or JSON error).")
+            notify(f"Retry {i+1}/3 failed for {url}: {e}")
+            time.sleep(4)
     return None
 
 
-# =============== GELATO RELAYER ===================
-def get_gelato_relayer():
-    """Fetch the most active Gelato relayer address with fallback."""
-    url = "https://api.gelato.network/v2/relayers"
+def verify_contract(addr: str) -> bool:
+    """Check if the contract actually exists on Sapphire explorer."""
     try:
-        r = requests.get(url, timeout=15)
-        data = r.json()
+        url = f"https://explorer.sapphire.oasis.io/api?module=contract&action=getabi&address={addr}"
+        r = requests.get(url, timeout=10)
+        js = r.json()
+        if r.status_code == 200 and "result" in js and js["result"]:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+# ===== core functions =====
+def get_active_contracts():
+    """Fetch Predictoor contract from any available registry."""
+    for url in OCEAN_PREDICTOOR_REGISTRY:
+        data = fetch_json(url)
+        if not data:
+            continue
+
+        sapphire = data.get("sapphire-mainnet", {})
+        predictoor = sapphire.get("Predictoor")
+
+        if predictoor and verify_contract(predictoor):
+            CACHE_CONTRACT.write_text(json.dumps({"predictoor_contract": predictoor}, indent=2))
+            notify(f"✅ Predictoor contract auto-fetched:\n{predictoor}")
+            return predictoor
+
+    # fallback: use cached if available
+    if CACHE_CONTRACT.exists():
+        cached = json.load(open(CACHE_CONTRACT))
+        predictoor = cached.get("predictoor_contract")
+        notify(f"⚠️ Using cached Predictoor contract:\n{predictoor}")
+        return predictoor
+
+    notify("❌ Predictoor contract unavailable (network or invalid).")
+    return None
+
+
+def auto_get_relayer():
+    """Select the most active Gelato relayer."""
+    for url in GELATO_RELAYER_API:
+        data = fetch_json(url)
+        if not data:
+            continue
+
         relayers = data.get("relayers", [])
         if not relayers:
-            notify("⚠️ No relayers found on Gelato API.")
-            return None
+            continue
 
-        # select the most active relayer
         best = max(relayers, key=lambda x: x.get("jobsExecuted", 0))
         relayer = best["address"]
-
-        with open("gelato_relayer.json", "w") as f:
-            json.dump({"relayer": relayer}, f)
-
+        CACHE_RELAYER.write_text(json.dumps({"relayer": relayer}, indent=2))
         notify(f"✅ Selected Gelato relayer:\n{relayer}")
         return relayer
 
-    except Exception as e:
-        notify(f"❌ Error fetching Gelato relayers: {e}")
-        # fallback to local
-        if os.path.exists("gelato_relayer.json"):
-            try:
-                with open("gelato_relayer.json") as f:
-                    cached = json.load(f).get("relayer")
-                    if cached:
-                        notify(f"♻️ Using cached relayer:\n{cached}")
-                        return cached
-            except Exception as e:
-                notify(f"❌ Cached relayer corrupted: {e}")
-        return None
+    # fallback: cached
+    if CACHE_RELAYER.exists():
+        cached = json.load(open(CACHE_RELAYER))
+        relayer = cached.get("relayer")
+        notify(f"⚠️ Using cached Gelato relayer:\n{relayer}")
+        return relayer
+
+    notify("❌ Unable to fetch or cache Gelato relayer.")
+    return None
 
 
-# =============== EXECUTION ===================
+# ===== run when executed =====
 if __name__ == "__main__":
-    notify("🔄 Auto-updating contract and relayer…")
-    contract = get_predictoor_contract()
-    time.sleep(1)
-    relayer = get_gelato_relayer()
+    notify("⚙️ Auto-updating contract and relayer...")
+    contract = get_active_contracts()
+    relayer = auto_get_relayer()
 
     if contract and relayer:
-        notify("✅ Contract + Relayer updated successfully.")
+        notify("✅ Auto-update successful and verified.")
     else:
-        notify("⚠️ Auto-update completed with some warnings.")
+        notify("⚠️ Auto-update completed with warnings or partial success.")
