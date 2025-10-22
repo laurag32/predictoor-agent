@@ -1,60 +1,29 @@
-name: 🤖 Predict Feeds (Auto-Agent)
+name: Predict Feeds
 
 on:
   schedule:
-    - cron: "*/180 * * * *"  # every 3 hours
+    - cron: "*/30 * * * *"  # every 30 minutes
   workflow_dispatch:
 
 jobs:
   predict:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 🧱 Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      - name: 📦 Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt python-telegram-bot requests
 
-      - name: 🔮 Run Predictoor Agent
-        id: agent_run
-        run: |
-          python agent_predictoor.py | tee predict_log.txt
+      - name: Run agent
         env:
-          WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
-          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-      - name: 🧩 Extract errors or warnings
-        id: log_summary
-        run: |
-          echo "errors=$(grep -E '❌|⚠️|Error|Failed|Traceback' predict_log.txt || echo 'None')" >> $GITHUB_OUTPUT
-
-      - name: 💾 Commit logs
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add performance_log.json || true
-          git commit -m "Update performance logs" || echo "No changes"
-          git push
-
-      - name: 📲 Send Telegram summary
-        if: always()
-        run: |
-          MSG="🤖 Predictoor Agent Run Completed
-          • Repo: $GITHUB_REPOSITORY
-          • Status: ${{ job.status }}
-          • Time: $(date -u)
-
-          ⚙️ Summary:
-          ${{ steps.log_summary.outputs.errors }}"
-          
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -d text="$MSG"
+          WALLET_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
+        run: python agent_runner.py
